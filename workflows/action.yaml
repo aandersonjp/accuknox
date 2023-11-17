@@ -1,0 +1,38 @@
+name: Trivy CSPM scan
+
+on:
+  pull_request:
+    branches:
+    - "*"
+env:
+  DOCKER_IMAGE: "accuknox/bootstrap:nginx"
+  DOCKERFILE_CONTEXT: "${{ github.workspace }}/nginx/"
+  CSPM_URL: "cspm.demo.accuknox.com"
+  CSPM_TOKEN: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjk5NjEwNzA1LCJqdGkiOiJlYTBmNjZiYzI2OTk0Y2RmOWU1YjJjYzBkZjUyOGI2NSIsImlzcyI6ImNzcG0uZGVtby5hY2N1a25veC5jb20ifQ.en8Hgjs5UyUwYYxrJrw6wNcEzLWomDxukk5cpP1iZkseBH4_Hz04AEov0wui9Ak8cNM7gQemBLhfO9YO7VDWq2-qALqe_wR_cW--S1pkrRNpPCDXgcQZy73YnEyYNH7GE8z2aOl_Ak62J5xYFZQPI3enWaSDCXLPXYAwcJnVDXx2pySi3rKDSNL71olf8SdC4JjP4wQ1OPTuI9W-iDqATe3hO-PnTqUxADjulSyvE5n0pm3f9pQ_Y6XOtKgAGVmDNT3UaAzhGWsb5uJu7-PdMflXDLmRJN_iQadk9c7p1Z8qy5jEjDIJU2z_sER0gtZVvQctobXxyECeHx858ikdfw"
+  #CSPM_TOKEN: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjk2NDExMzIwLCJqdGkiOiIzMjFiNjYxZTJmN2Q0MGNjOWVmMDU5OWQ5NWU4NDk1MiIsImlzcyI6ImNzcG0uZGVtby5hY2N1a25veC5jb20ifQ.L99J1OtKQy-Wm7ZrLlFYEwEw_6HSk20gq6bkZ9jayNX_vXHF7TKYc-ogNNUrvtpncdHB4l15WBzVdTInLENcQwXYTfFg7XXf83zBO7awBVswk8k7gGNJwhtu8qnfMgVqf_838qDOT6OkaPdkKSW5-uingKXhU1g1D0W8FX1JgjKGDrG2YyD45IUHVwCLr-KEZmLkWrEfNYn34EtQphlimxVJPm04ZTIE45JxYKF1xpiinUOYJTvot7NFiU7Asy9w6OFSjbFPVmWaT4Af19GUzgp70mkVJP6HrvwOqqH_KdzieHNcI525SfUM5ujayBzqz4IcAF5AomXZxUbrGOidzw"
+  #"expiry_at": "2023-10-04T09:22:00Z",
+  #"created_at": "2023-09-04T09:22:00.996979Z",
+  TENANT_ID: "1255"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build an image from Dockerfile
+        run: |
+          docker build -t ${{env.DOCKER_IMAGE}} ${{env.DOCKERFILE_CONTEXT}}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{env.DOCKER_IMAGE}}
+          format: 'json'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          output: 'results.json'
+      - name: Push report to CSPM panel
+        run: |
+          curl --location --request POST 'https://${{env.CSPM_URL}}/api/v1/artifact/?tenant_id=${{ env.TENANT_ID }}&data_type=TR&save_to_s3=false' --header 'Authorization: Bearer ${{ env.CSPM_TOKEN }}' --form 'file=@"./results.json"'
